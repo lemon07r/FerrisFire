@@ -1,0 +1,26 @@
+[package]
+name = "ferrisfire"
+version = "0.1.0"
+edition = "2024"
+description = "Low-latency mouse rapid-fire tool for Linux"
+license = "MIT"
+
+[[bin]]
+name = "libinput-helper"
+path = "src/main.rs"
+
+[dependencies]
+evdev = "0.13"
+eframe = "0.33"
+egui = "0.33"
+rand = "0.9"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+env_logger = "0.11"
+dirs-next = "2.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

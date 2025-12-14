@@ -1,0 +1,16 @@
+# Build
+/target/
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (contains user device paths)
+config.json
