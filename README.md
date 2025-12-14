@@ -2,7 +2,7 @@
 
 <img width="256" height="253" alt="ferrisfire" src="https://github.com/user-attachments/assets/63dee274-a9c0-4fc3-a22f-d74913b255af" />
 
-A low-latency mouse rapid-fire tool for Linux. Hold a side button on your mouse and it clicks rapidly with humanized timing.
+A low-latency mouse rapid-fire tool for Linux. Hold your configured button and it clicks rapidly with humanized timing.
 
 ## How It Works
 
