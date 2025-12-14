@@ -30,8 +30,13 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
 
     let trigger_key = config.effective_trigger_code();
     let mut trigger_held = false;
-    let mut last_click = Instant::now();
+    let mut last_click_down = Instant::now();
     let mut next_click_interval = random_click_interval(config.click_delay_min_ms, config.click_delay_max_ms);
+    
+    // Non-blocking click state tracking
+    let mut click_button_down = false;
+    let mut click_down_time = Instant::now();
+    let mut current_travel_time = random_travel_time(config.travel_time_min_ms, config.travel_time_max_ms);
 
     log::info!("Proxy started for device: {}", config.device_path);
     log::info!("Trigger key: {:?} (code {})", trigger_key, trigger_key.0);
@@ -66,15 +71,24 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
             }
         }
 
-        // Generate clicks while trigger is held
-        if trigger_held && last_click.elapsed() >= next_click_interval {
-            emit_humanized_click(&mut virtual_dev, &config);
-            last_click = Instant::now();
+        // Handle button release (non-blocking)
+        if click_button_down && click_down_time.elapsed() >= current_travel_time {
+            emit_button_up(&mut virtual_dev);
+            click_button_down = false;
+        }
+
+        // Generate clicks while trigger is held (only if not mid-click)
+        if trigger_held && !click_button_down && last_click_down.elapsed() >= next_click_interval {
+            emit_button_down(&mut virtual_dev);
+            click_button_down = true;
+            click_down_time = Instant::now();
+            last_click_down = Instant::now();
+            current_travel_time = random_travel_time(config.travel_time_min_ms, config.travel_time_max_ms);
             next_click_interval = random_click_interval(config.click_delay_min_ms, config.click_delay_max_ms);
         }
 
         // Small sleep to prevent CPU spinning
-        thread::sleep(Duration::from_micros(500));
+        thread::sleep(Duration::from_micros(100));
     }
 
     physical.ungrab().ok();
@@ -82,18 +96,18 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_humanized_click(virtual_dev: &mut evdev::uinput::VirtualDevice, config: &Config) {
+fn emit_button_down(virtual_dev: &mut evdev::uinput::VirtualDevice) {
     let btn_down = InputEvent::new(EventType::KEY.0, KeyCode::BTN_LEFT.0, 1);
-    let btn_up = InputEvent::new(EventType::KEY.0, KeyCode::BTN_LEFT.0, 0);
     let sync = InputEvent::new(EventType::SYNCHRONIZATION.0, SynchronizationCode::SYN_REPORT.0, 0);
 
     if let Err(e) = virtual_dev.emit(&[btn_down, sync]) {
         log::warn!("Failed to emit button down: {}", e);
-        return;
     }
+}
 
-    let travel_time = random_travel_time(config.travel_time_min_ms, config.travel_time_max_ms);
-    thread::sleep(travel_time);
+fn emit_button_up(virtual_dev: &mut evdev::uinput::VirtualDevice) {
+    let btn_up = InputEvent::new(EventType::KEY.0, KeyCode::BTN_LEFT.0, 0);
+    let sync = InputEvent::new(EventType::SYNCHRONIZATION.0, SynchronizationCode::SYN_REPORT.0, 0);
 
     if let Err(e) = virtual_dev.emit(&[btn_up, sync]) {
         log::warn!("Failed to emit button up: {}", e);

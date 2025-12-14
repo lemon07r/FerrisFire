@@ -127,7 +127,12 @@ impl eframe::App for FerrisFireApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("FerrisFire");
-            ui.label("Low-latency mouse rapid-fire tool");
+            ui.horizontal(|ui| {
+                ui.label("Low-latency mouse rapid-fire tool");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).weak());
+                });
+            });
             ui.separator();
 
             if let Some(error) = &self.error_message {
