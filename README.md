@@ -1,5 +1,7 @@
 # FerrisFire
 
+<img width="256" height="253" alt="ferrisfire" src="https://github.com/user-attachments/assets/63dee274-a9c0-4fc3-a22f-d74913b255af" />
+
 A low-latency mouse rapid-fire tool for Linux. Hold a side button on your mouse and it clicks rapidly with humanized timing.
 
 ## How It Works
@@ -12,6 +14,8 @@ FerrisFire acts as a transparent proxy between your physical mouse and the opera
 4. When you hold the trigger button, it injects rapid left-clicks with randomized timing
 
 The game only sees one mouse device with your real hardware's identity. The randomized delays between clicks and the simulated button travel time make the input pattern look natural rather than mechanical.
+
+<img width="572" height="818" alt="2025-12-14_11-50" src="https://github.com/user-attachments/assets/e6b5670b-7e09-4fe7-bc33-5dd9664b6808" />
 
 ## Building
 
