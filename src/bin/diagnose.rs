@@ -53,7 +53,7 @@ fn main() {
     let mut devices: Vec<(String, Device)> = Vec::new();
     for (path, name) in mice {
         match Device::open(&path) {
-            Ok(mut dev) => {
+            Ok(dev) => {
                 // Set non-blocking
                 let fd = dev.as_raw_fd();
                 unsafe {
