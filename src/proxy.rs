@@ -31,6 +31,7 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
     let trigger_key = config.effective_trigger_code();
     let mut trigger_held = false;
     let mut last_click = Instant::now();
+    let mut next_click_interval = random_click_interval(config.click_delay_min_ms, config.click_delay_max_ms);
 
     log::info!("Proxy started for device: {}", config.device_path);
     log::info!("Trigger key: {:?} (code {})", trigger_key, trigger_key.0);
@@ -66,12 +67,10 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
         }
 
         // Generate clicks while trigger is held
-        if trigger_held {
-            let click_interval = random_click_interval(config.click_delay_min_ms, config.click_delay_max_ms);
-            if last_click.elapsed() >= click_interval {
-                emit_humanized_click(&mut virtual_dev, &config);
-                last_click = Instant::now();
-            }
+        if trigger_held && last_click.elapsed() >= next_click_interval {
+            emit_humanized_click(&mut virtual_dev, &config);
+            last_click = Instant::now();
+            next_click_interval = random_click_interval(config.click_delay_min_ms, config.click_delay_max_ms);
         }
 
         // Small sleep to prevent CPU spinning
