@@ -29,6 +29,24 @@ The binary will be at `target/release/libinput-helper`.
 
 The process name is intentionally bland. To change it, edit the `[[bin]]` section in `Cargo.toml` and rebuild.
 
+## Installation (Optional)
+
+To install system-wide with a desktop entry and icon:
+
+```bash
+# Install binary
+sudo cp target/release/libinput-helper /usr/local/bin/
+
+# Install icon
+sudo cp assets/ferrisfire.png /usr/share/icons/hicolor/256x256/apps/ferrisfire.png
+sudo gtk-update-icon-cache /usr/share/icons/hicolor/
+
+# Install desktop entry
+sudo cp ferrisfire.desktop /usr/share/applications/
+```
+
+This enables the application icon to appear in Wayland and in your application launcher.
+
 ## Setup
 
 You need permission to access input devices. Add yourself to the `input` group:

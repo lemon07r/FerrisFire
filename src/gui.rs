@@ -155,32 +155,34 @@ impl eframe::App for FerrisFireApp {
                     .map(|d| d.display_name())
                     .unwrap_or_else(|| "Select a device...".to_string());
 
-                ui.horizontal(|ui| {
-                    egui::ComboBox::from_label("Input Device")
-                        .selected_text(current_name)
-                        .width(250.0)
-                        .show_ui(ui, |ui| {
-                            for (idx, device) in self.available_devices.iter().enumerate() {
-                                let is_selected = self.selected_device_index == Some(idx);
-                                if ui
-                                    .selectable_label(is_selected, device.display_name())
-                                    .clicked()
-                                {
-                                    self.selected_device_index = Some(idx);
-                                    self.config.device_path = device.path.clone();
-                                }
+                // Truncate display name if too long
+                let display_name = if current_name.len() > 40 {
+                    format!("{}...", &current_name[..37])
+                } else {
+                    current_name
+                };
+
+                egui::ComboBox::from_label("Input Device")
+                    .selected_text(display_name)
+                    .width(350.0)
+                    .show_ui(ui, |ui| {
+                        for (idx, device) in self.available_devices.iter().enumerate() {
+                            let is_selected = self.selected_device_index == Some(idx);
+                            if ui
+                                .selectable_label(is_selected, device.display_name())
+                                .clicked()
+                            {
+                                self.selected_device_index = Some(idx);
+                                self.config.device_path = device.path.clone();
                             }
-                        });
-
-                    if ui.button("Refresh").clicked() {
-                        self.refresh_devices();
-                    }
-                });
+                        }
+                    });
 
                 ui.horizontal(|ui| {
-                    if ui.checkbox(&mut self.show_all_devices, "Show all input devices").changed() {
+                    if ui.button("Refresh Devices").clicked() {
                         self.refresh_devices();
                     }
+                    ui.checkbox(&mut self.show_all_devices, "Show all input devices");
                 });
             });
 

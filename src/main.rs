@@ -16,8 +16,8 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([420.0, 740.0])
-            .with_min_inner_size([380.0, 620.0])
+            .with_inner_size([480.0, 820.0])
+            .with_min_inner_size([450.0, 700.0])
             .with_title("FerrisFire")
             .with_icon(icon),
         ..Default::default()
@@ -31,7 +31,7 @@ fn main() -> eframe::Result<()> {
 }
 
 fn load_icon() -> egui::IconData {
-    let icon_bytes = include_bytes!("../assets/ferrisfire.ico");
+    let icon_bytes = include_bytes!("../assets/ferrisfire.png");
     
     match image::load_from_memory(icon_bytes) {
         Ok(img) => {

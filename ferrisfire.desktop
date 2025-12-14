@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=FerrisFire
+Comment=Low-latency mouse rapid-fire tool for Linux
+Exec=libinput-helper
+Icon=ferrisfire
+Terminal=false
+Type=Application
+Categories=Utility;Game;
+Keywords=mouse;rapidfire;gaming;
