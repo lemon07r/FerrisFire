@@ -14,3 +14,7 @@ Thumbs.db
 
 # Config (contains user device paths)
 config.json
+
+# PAMPAX
+.pampa/
+pampa.*

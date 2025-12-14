@@ -4,23 +4,102 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TriggerButton {
+    Mouse3,
     Mouse4,
     Mouse5,
+    Mouse6,
+    Mouse7,
+    Mouse8,
+    ScrollUp,
+    ScrollDown,
+    KeyF13,
+    KeyF14,
+    KeyF15,
+    KeyF16,
+    KeyF17,
+    KeyF18,
+    KeyF19,
+    KeyF20,
+    KeyF21,
+    KeyF22,
+    KeyF23,
+    KeyF24,
 }
 
 impl TriggerButton {
     pub fn to_key_code(&self) -> evdev::KeyCode {
         match self {
+            TriggerButton::Mouse3 => evdev::KeyCode::BTN_MIDDLE,
             TriggerButton::Mouse4 => evdev::KeyCode::BTN_SIDE,
             TriggerButton::Mouse5 => evdev::KeyCode::BTN_EXTRA,
+            TriggerButton::Mouse6 => evdev::KeyCode::BTN_FORWARD,
+            TriggerButton::Mouse7 => evdev::KeyCode::BTN_BACK,
+            TriggerButton::Mouse8 => evdev::KeyCode::BTN_TASK,
+            TriggerButton::ScrollUp => evdev::KeyCode::BTN_GEAR_UP,
+            TriggerButton::ScrollDown => evdev::KeyCode::BTN_GEAR_DOWN,
+            TriggerButton::KeyF13 => evdev::KeyCode::KEY_F13,
+            TriggerButton::KeyF14 => evdev::KeyCode::KEY_F14,
+            TriggerButton::KeyF15 => evdev::KeyCode::KEY_F15,
+            TriggerButton::KeyF16 => evdev::KeyCode::KEY_F16,
+            TriggerButton::KeyF17 => evdev::KeyCode::KEY_F17,
+            TriggerButton::KeyF18 => evdev::KeyCode::KEY_F18,
+            TriggerButton::KeyF19 => evdev::KeyCode::KEY_F19,
+            TriggerButton::KeyF20 => evdev::KeyCode::KEY_F20,
+            TriggerButton::KeyF21 => evdev::KeyCode::KEY_F21,
+            TriggerButton::KeyF22 => evdev::KeyCode::KEY_F22,
+            TriggerButton::KeyF23 => evdev::KeyCode::KEY_F23,
+            TriggerButton::KeyF24 => evdev::KeyCode::KEY_F24,
         }
     }
 
     pub fn display_name(&self) -> &'static str {
         match self {
+            TriggerButton::Mouse3 => "Mouse 3 (Middle)",
             TriggerButton::Mouse4 => "Mouse 4 (Side)",
             TriggerButton::Mouse5 => "Mouse 5 (Extra)",
+            TriggerButton::Mouse6 => "Mouse 6 (Forward)",
+            TriggerButton::Mouse7 => "Mouse 7 (Back)",
+            TriggerButton::Mouse8 => "Mouse 8 (Task)",
+            TriggerButton::ScrollUp => "Scroll Up Click",
+            TriggerButton::ScrollDown => "Scroll Down Click",
+            TriggerButton::KeyF13 => "F13",
+            TriggerButton::KeyF14 => "F14",
+            TriggerButton::KeyF15 => "F15",
+            TriggerButton::KeyF16 => "F16",
+            TriggerButton::KeyF17 => "F17",
+            TriggerButton::KeyF18 => "F18",
+            TriggerButton::KeyF19 => "F19",
+            TriggerButton::KeyF20 => "F20",
+            TriggerButton::KeyF21 => "F21",
+            TriggerButton::KeyF22 => "F22",
+            TriggerButton::KeyF23 => "F23",
+            TriggerButton::KeyF24 => "F24",
         }
+    }
+
+    pub fn all() -> &'static [TriggerButton] {
+        &[
+            TriggerButton::Mouse3,
+            TriggerButton::Mouse4,
+            TriggerButton::Mouse5,
+            TriggerButton::Mouse6,
+            TriggerButton::Mouse7,
+            TriggerButton::Mouse8,
+            TriggerButton::ScrollUp,
+            TriggerButton::ScrollDown,
+            TriggerButton::KeyF13,
+            TriggerButton::KeyF14,
+            TriggerButton::KeyF15,
+            TriggerButton::KeyF16,
+            TriggerButton::KeyF17,
+            TriggerButton::KeyF18,
+            TriggerButton::KeyF19,
+            TriggerButton::KeyF20,
+            TriggerButton::KeyF21,
+            TriggerButton::KeyF22,
+            TriggerButton::KeyF23,
+            TriggerButton::KeyF24,
+        ]
     }
 }
 

@@ -37,12 +37,44 @@ pub fn enumerate_mice() -> Vec<DeviceInfo> {
 }
 
 fn is_mouse(device: &Device) -> bool {
-    if let Some(keys) = device.supported_keys() {
-        let has_left_click = keys.contains(KeyCode::BTN_LEFT);
-        let has_relative = device.supported_relative_axes().is_some();
-        return has_left_click && has_relative;
+    // Check for mouse-like buttons
+    let has_mouse_buttons = device.supported_keys().map_or(false, |keys| {
+        keys.contains(KeyCode::BTN_LEFT)
+            || keys.contains(KeyCode::BTN_RIGHT)
+            || keys.contains(KeyCode::BTN_MIDDLE)
+    });
+
+    // Check for relative axes (movement)
+    let has_relative = device.supported_relative_axes().map_or(false, |axes| {
+        axes.contains(RelativeAxisCode::REL_X) || axes.contains(RelativeAxisCode::REL_Y)
+    });
+
+    // Accept if it has mouse buttons OR relative axes (more permissive)
+    has_mouse_buttons || has_relative
+}
+
+pub fn enumerate_all_input_devices() -> Vec<DeviceInfo> {
+    let mut devices = Vec::new();
+
+    for entry in evdev::enumerate() {
+        let (path, device) = entry;
+        let id = device.input_id();
+        let name = device.name().unwrap_or("Unknown Device").to_string();
+        
+        // Skip virtual/uinput devices we might have created
+        if name.to_lowercase().contains("virtual") {
+            continue;
+        }
+
+        devices.push(DeviceInfo {
+            path: path.to_string_lossy().to_string(),
+            name,
+            vendor_id: id.vendor(),
+            product_id: id.product(),
+        });
     }
-    false
+
+    devices
 }
 
 pub fn open_device(path: &str) -> io::Result<Device> {

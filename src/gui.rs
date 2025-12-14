@@ -1,5 +1,5 @@
 use crate::config::{Config, TriggerButton};
-use crate::device::{enumerate_mice, DeviceInfo};
+use crate::device::{enumerate_all_input_devices, enumerate_mice, DeviceInfo};
 use crate::proxy::spawn_proxy;
 use eframe::egui;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -10,6 +10,7 @@ pub struct FerrisFireApp {
     config: Config,
     available_devices: Vec<DeviceInfo>,
     selected_device_index: Option<usize>,
+    show_all_devices: bool,
     running: bool,
     stop_signal: Arc<AtomicBool>,
     proxy_handle: Option<JoinHandle<Result<(), String>>>,
@@ -34,6 +35,7 @@ impl FerrisFireApp {
             config,
             available_devices,
             selected_device_index,
+            show_all_devices: false,
             running: false,
             stop_signal: Arc::new(AtomicBool::new(false)),
             proxy_handle: None,
@@ -43,7 +45,11 @@ impl FerrisFireApp {
     }
 
     fn refresh_devices(&mut self) {
-        self.available_devices = enumerate_mice();
+        self.available_devices = if self.show_all_devices {
+            enumerate_all_input_devices()
+        } else {
+            enumerate_mice()
+        };
         if let Some(idx) = self.selected_device_index {
             if idx >= self.available_devices.len() {
                 self.selected_device_index = None;
@@ -127,16 +133,17 @@ impl eframe::App for FerrisFireApp {
             ui.separator();
             ui.heading("Device Selection");
 
-            ui.horizontal(|ui| {
+            ui.add_enabled_ui(!self.running, |ui| {
                 let current_name = self
                     .selected_device_index
                     .and_then(|i| self.available_devices.get(i))
                     .map(|d| d.display_name())
                     .unwrap_or_else(|| "Select a device...".to_string());
 
-                ui.add_enabled_ui(!self.running, |ui| {
+                ui.horizontal(|ui| {
                     egui::ComboBox::from_label("Input Device")
                         .selected_text(current_name)
+                        .width(250.0)
                         .show_ui(ui, |ui| {
                             for (idx, device) in self.available_devices.iter().enumerate() {
                                 let is_selected = self.selected_device_index == Some(idx);
@@ -149,11 +156,17 @@ impl eframe::App for FerrisFireApp {
                                 }
                             }
                         });
+
+                    if ui.button("Refresh").clicked() {
+                        self.refresh_devices();
+                    }
                 });
 
-                if ui.button("Refresh").clicked() {
-                    self.refresh_devices();
-                }
+                ui.horizontal(|ui| {
+                    if ui.checkbox(&mut self.show_all_devices, "Show all input devices").changed() {
+                        self.refresh_devices();
+                    }
+                });
             });
 
             ui.separator();
@@ -164,17 +177,15 @@ impl eframe::App for FerrisFireApp {
                     ui.label("Trigger Button:");
                     egui::ComboBox::from_id_salt("trigger_combo")
                         .selected_text(self.config.trigger_button.display_name())
+                        .width(150.0)
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut self.config.trigger_button,
-                                TriggerButton::Mouse4,
-                                TriggerButton::Mouse4.display_name(),
-                            );
-                            ui.selectable_value(
-                                &mut self.config.trigger_button,
-                                TriggerButton::Mouse5,
-                                TriggerButton::Mouse5.display_name(),
-                            );
+                            for trigger in TriggerButton::all() {
+                                ui.selectable_value(
+                                    &mut self.config.trigger_button,
+                                    *trigger,
+                                    trigger.display_name(),
+                                );
+                            }
                         });
                 });
             });
@@ -239,13 +250,15 @@ impl eframe::App for FerrisFireApp {
             ui.separator();
             ui.collapsing("Help", |ui| {
                 ui.label("1. Select your mouse from the device list");
-                ui.label("2. Choose which button triggers rapid-fire (Mouse 4 or 5)");
+                ui.label("   (Enable 'Show all input devices' if not listed)");
+                ui.label("2. Choose a trigger button (mouse button or F-key)");
                 ui.label("3. Adjust timing for humanization:");
                 ui.label("   - Click Delay: time between consecutive clicks");
                 ui.label("   - Travel Time: how long button stays pressed");
                 ui.label("4. Click Start and hold your trigger button in-game");
                 ui.add_space(5.0);
                 ui.label("Note: Requires 'input' group membership or root access.");
+                ui.label("F13-F24 keys can be bound to mouse buttons via software.");
             });
         });
 

@@ -14,8 +14,8 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 550.0])
-            .with_min_inner_size([350.0, 450.0])
+            .with_inner_size([420.0, 650.0])
+            .with_min_inner_size([380.0, 550.0])
             .with_title("FerrisFire"),
         ..Default::default()
     };
