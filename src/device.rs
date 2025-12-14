@@ -1,7 +1,9 @@
 use evdev::{
     uinput::VirtualDevice, AttributeSet, Device, InputId, KeyCode, RelativeAxisCode,
 };
+use std::fs;
 use std::io;
+use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
@@ -20,6 +22,7 @@ impl DeviceInfo {
 pub fn enumerate_mice() -> Vec<DeviceInfo> {
     let mut devices = Vec::new();
 
+    // Try evdev enumerate first
     for entry in evdev::enumerate() {
         let (path, device) = entry;
         if is_mouse(&device) {
@@ -31,6 +34,12 @@ pub fn enumerate_mice() -> Vec<DeviceInfo> {
                 product_id: id.product(),
             });
         }
+    }
+
+    // If evdev enumerate returned nothing, try manual scan
+    if devices.is_empty() {
+        log::warn!("evdev::enumerate() returned no mice, trying manual scan");
+        devices = manual_scan_input_devices(true);
     }
 
     devices
@@ -74,6 +83,60 @@ pub fn enumerate_all_input_devices() -> Vec<DeviceInfo> {
         });
     }
 
+    // If evdev enumerate returned nothing, try manual scan
+    if devices.is_empty() {
+        log::warn!("evdev::enumerate() returned no devices, trying manual scan");
+        devices = manual_scan_input_devices(false);
+    }
+
+    devices
+}
+
+fn manual_scan_input_devices(mice_only: bool) -> Vec<DeviceInfo> {
+    let mut devices = Vec::new();
+    let input_dir = Path::new("/dev/input");
+
+    if let Ok(entries) = fs::read_dir(input_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            
+            // Only process event devices
+            if !filename.starts_with("event") {
+                continue;
+            }
+
+            match Device::open(&path) {
+                Ok(device) => {
+                    if mice_only && !is_mouse(&device) {
+                        continue;
+                    }
+
+                    let id = device.input_id();
+                    let name = device.name().unwrap_or("Unknown Device").to_string();
+                    
+                    if name.to_lowercase().contains("virtual") {
+                        continue;
+                    }
+
+                    devices.push(DeviceInfo {
+                        path: path.to_string_lossy().to_string(),
+                        name,
+                        vendor_id: id.vendor(),
+                        product_id: id.product(),
+                    });
+                }
+                Err(e) => {
+                    log::debug!("Cannot open {}: {} (permission denied?)", path.display(), e);
+                }
+            }
+        }
+    } else {
+        log::error!("Cannot read /dev/input directory");
+    }
+
+    // Sort by path for consistent ordering
+    devices.sort_by(|a, b| a.path.cmp(&b.path));
     devices
 }
 

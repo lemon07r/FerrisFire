@@ -1,6 +1,8 @@
 use crate::config::{Config, TriggerButton};
 use crate::device::{enumerate_all_input_devices, enumerate_mice, DeviceInfo};
 use crate::proxy::spawn_proxy;
+#[cfg(feature = "tray")]
+use crate::tray::{SystemTray, TrayEvent};
 use eframe::egui;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -16,6 +18,10 @@ pub struct FerrisFireApp {
     proxy_handle: Option<JoinHandle<Result<(), String>>>,
     status_message: String,
     error_message: Option<String>,
+    #[cfg(feature = "tray")]
+    system_tray: Option<SystemTray>,
+    #[cfg(feature = "tray")]
+    minimize_to_tray: bool,
 }
 
 impl FerrisFireApp {
@@ -31,6 +37,15 @@ impl FerrisFireApp {
             None
         };
 
+        #[cfg(feature = "tray")]
+        let system_tray = {
+            let tray = SystemTray::new();
+            if tray.is_none() {
+                log::warn!("Failed to create system tray");
+            }
+            tray
+        };
+
         Self {
             config,
             available_devices,
@@ -41,6 +56,10 @@ impl FerrisFireApp {
             proxy_handle: None,
             status_message: "Ready".to_string(),
             error_message: None,
+            #[cfg(feature = "tray")]
+            system_tray,
+            #[cfg(feature = "tray")]
+            minimize_to_tray: false,
         }
     }
 
@@ -110,6 +129,31 @@ impl FerrisFireApp {
 
 impl eframe::App for FerrisFireApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Handle system tray events
+        #[cfg(feature = "tray")]
+        if let Some(ref tray) = self.system_tray {
+            if let Some(event) = tray.poll_events() {
+                match event {
+                    TrayEvent::Show => {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    }
+                    TrayEvent::Quit => {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                }
+            }
+        }
+
+        // Handle close request - minimize to tray if enabled
+        #[cfg(feature = "tray")]
+        if ctx.input(|i| i.viewport().close_requested()) {
+            if self.minimize_to_tray && self.system_tray.is_some() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            }
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("FerrisFire");
             ui.label("Low-latency mouse rapid-fire tool");
@@ -248,6 +292,14 @@ impl eframe::App for FerrisFireApp {
             });
 
             ui.separator();
+
+            // System tray option
+            #[cfg(feature = "tray")]
+            if self.system_tray.is_some() {
+                ui.checkbox(&mut self.minimize_to_tray, "Minimize to system tray on close");
+                ui.separator();
+            }
+
             ui.collapsing("Help", |ui| {
                 ui.label("1. Select your mouse from the device list");
                 ui.label("   (Enable 'Show all input devices' if not listed)");

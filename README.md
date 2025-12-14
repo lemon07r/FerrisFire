@@ -23,6 +23,10 @@ sudo apt install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbc
 
 # Build
 cargo build --release
+
+# Build with system tray support (optional)
+sudo apt install libgtk-3-dev libxdo-dev libappindicator3-dev
+cargo build --release --features tray
 ```
 
 The binary will be at `target/release/libinput-helper`.
@@ -49,7 +53,7 @@ sudo udevadm trigger
 
 ## Usage
 
-Run the application:
+Run the application (you may need to run it as root/with sudo to see all input devices if setup steps were skipped):
 
 ```bash
 ./target/release/libinput-helper
@@ -57,10 +61,11 @@ Run the application:
 
 The GUI lets you:
 
-- **Select your mouse** from the dropdown (click Refresh if you plug in a different one)
-- **Choose the trigger button** - Mouse 4 (side button) or Mouse 5 (extra button)
+- **Select your mouse** from the dropdown (click Refresh if you plug in a different one). Enable "Show all input devices" if your mouse isn't listed.
+- **Choose the trigger button** - Mouse 3-8, scroll wheel clicks, or F13-F24 keys (useful if your mouse software can remap buttons to F-keys)
 - **Set click delay range** - time between clicks in milliseconds (default: 45-80ms)
 - **Set travel time range** - how long each click is held down (default: 10-25ms)
+- **Minimize to tray** - if built with `--features tray`, the app can minimize to the system tray instead of closing
 
 Click Start, then hold your trigger button in-game to rapid-fire.
 
@@ -91,7 +96,7 @@ cargo test
 
 **Mouse stops working entirely**: The grab was successful but something went wrong. Close FerrisFire or kill the process - your mouse will return to normal.
 
-**No devices listed**: You might not have permission to read `/dev/input/event*` files. Verify group membership and re-login.
+**No devices listed**: You might not have permission to read `/dev/input/event*` files. Verify group membership and re-login. Try enabling "Show all input devices" to see everything. You can also try running with sudo.
 
 ## License
 
