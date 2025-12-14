@@ -3,8 +3,6 @@ mod device;
 mod gui;
 mod humanize;
 mod proxy;
-#[cfg(feature = "tray")]
-mod tray;
 
 use eframe::egui;
 use gui::FerrisFireApp;
@@ -18,8 +16,8 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([420.0, 720.0])
-            .with_min_inner_size([380.0, 600.0])
+            .with_inner_size([420.0, 740.0])
+            .with_min_inner_size([380.0, 620.0])
             .with_title("FerrisFire")
             .with_icon(icon),
         ..Default::default()

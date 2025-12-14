@@ -1,12 +1,11 @@
 use crate::config::{Config, TriggerButton};
-use crate::device::{enumerate_all_input_devices, enumerate_mice, DeviceInfo};
+use crate::device::{enumerate_all_input_devices, enumerate_mice, record_button_press, DeviceInfo};
 use crate::proxy::spawn_proxy;
-#[cfg(feature = "tray")]
-use crate::tray::{SystemTray, TrayEvent};
 use eframe::egui;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 pub struct FerrisFireApp {
     config: Config,
@@ -18,10 +17,11 @@ pub struct FerrisFireApp {
     proxy_handle: Option<JoinHandle<Result<(), String>>>,
     status_message: String,
     error_message: Option<String>,
-    #[cfg(feature = "tray")]
-    system_tray: Option<SystemTray>,
-    #[cfg(feature = "tray")]
-    minimize_to_tray: bool,
+    // Button recording state
+    recording: bool,
+    recording_cancel: Arc<AtomicBool>,
+    recording_handle: Option<JoinHandle<Option<(u16, String)>>>,
+    recorded_button_name: Option<String>,
 }
 
 impl FerrisFireApp {
@@ -37,14 +37,10 @@ impl FerrisFireApp {
             None
         };
 
-        #[cfg(feature = "tray")]
-        let system_tray = {
-            let tray = SystemTray::new();
-            if tray.is_none() {
-                log::warn!("Failed to create system tray");
-            }
-            tray
-        };
+        // If there's a custom code, try to get its name
+        let recorded_button_name = config.custom_trigger_code.map(|code| {
+            format!("{:?}", evdev::KeyCode(code))
+        });
 
         Self {
             config,
@@ -56,10 +52,10 @@ impl FerrisFireApp {
             proxy_handle: None,
             status_message: "Ready".to_string(),
             error_message: None,
-            #[cfg(feature = "tray")]
-            system_tray,
-            #[cfg(feature = "tray")]
-            minimize_to_tray: false,
+            recording: false,
+            recording_cancel: Arc::new(AtomicBool::new(false)),
+            recording_handle: None,
+            recorded_button_name,
         }
     }
 
@@ -129,31 +125,6 @@ impl FerrisFireApp {
 
 impl eframe::App for FerrisFireApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Handle system tray events
-        #[cfg(feature = "tray")]
-        if let Some(ref tray) = self.system_tray {
-            if let Some(event) = tray.poll_events() {
-                match event {
-                    TrayEvent::Show => {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                    }
-                    TrayEvent::Quit => {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-                }
-            }
-        }
-
-        // Handle close request - minimize to tray if enabled
-        #[cfg(feature = "tray")]
-        if ctx.input(|i| i.viewport().close_requested()) {
-            if self.minimize_to_tray && self.system_tray.is_some() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            }
-        }
-
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("FerrisFire");
             ui.label("Low-latency mouse rapid-fire tool");
@@ -216,23 +187,101 @@ impl eframe::App for FerrisFireApp {
             ui.separator();
             ui.heading("Trigger Configuration");
 
-            ui.add_enabled_ui(!self.running, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Trigger Button:");
-                    egui::ComboBox::from_id_salt("trigger_combo")
-                        .selected_text(self.config.trigger_button.display_name())
-                        .width(150.0)
-                        .show_ui(ui, |ui| {
-                            for trigger in TriggerButton::all() {
-                                ui.selectable_value(
-                                    &mut self.config.trigger_button,
-                                    *trigger,
-                                    trigger.display_name(),
-                                );
+            // Check if recording finished
+            if self.recording {
+                if let Some(handle) = self.recording_handle.take() {
+                    if handle.is_finished() {
+                        match handle.join() {
+                            Ok(Some((code, name))) => {
+                                self.config.custom_trigger_code = Some(code);
+                                self.recorded_button_name = Some(name);
+                                self.status_message = "Button recorded!".to_string();
                             }
-                        });
+                            Ok(None) => {
+                                self.status_message = "Recording cancelled or timed out".to_string();
+                            }
+                            Err(_) => {
+                                self.error_message = Some("Recording thread panicked".to_string());
+                            }
+                        }
+                        self.recording = false;
+                    } else {
+                        self.recording_handle = Some(handle);
+                    }
+                }
+            }
+
+            ui.add_enabled_ui(!self.running && !self.recording, |ui| {
+                // Show current trigger
+                let current_trigger_text = if let Some(ref name) = self.recorded_button_name {
+                    format!("Custom: {} (code {})", name, self.config.custom_trigger_code.unwrap_or(0))
+                } else {
+                    self.config.trigger_button.display_name().to_string()
+                };
+
+                ui.horizontal(|ui| {
+                    ui.label("Current Trigger:");
+                    ui.label(egui::RichText::new(&current_trigger_text).strong());
                 });
+
+                ui.horizontal(|ui| {
+                    // Record button
+                    if ui.button("Record Button").clicked() {
+                        if !self.config.device_path.is_empty() {
+                            self.recording_cancel.store(false, Ordering::SeqCst);
+                            let cancel = Arc::clone(&self.recording_cancel);
+                            let device_path = self.config.device_path.clone();
+                            
+                            self.recording_handle = Some(std::thread::spawn(move || {
+                                record_button_press(&device_path, cancel, Duration::from_secs(10))
+                            }));
+                            self.recording = true;
+                            self.status_message = "Press any button on your mouse...".to_string();
+                        } else {
+                            self.error_message = Some("Select a device first".to_string());
+                        }
+                    }
+
+                    // Clear custom button
+                    if self.config.custom_trigger_code.is_some() {
+                        if ui.button("Clear Custom").clicked() {
+                            self.config.custom_trigger_code = None;
+                            self.recorded_button_name = None;
+                            self.status_message = "Using preset trigger".to_string();
+                        }
+                    }
+                });
+
+                // Preset dropdown (only used if no custom code)
+                if self.config.custom_trigger_code.is_none() {
+                    ui.horizontal(|ui| {
+                        ui.label("Or select preset:");
+                        egui::ComboBox::from_id_salt("trigger_combo")
+                            .selected_text(self.config.trigger_button.display_name())
+                            .width(150.0)
+                            .show_ui(ui, |ui| {
+                                for trigger in TriggerButton::all() {
+                                    ui.selectable_value(
+                                        &mut self.config.trigger_button,
+                                        *trigger,
+                                        trigger.display_name(),
+                                    );
+                                }
+                            });
+                    });
+                }
             });
+
+            // Show recording status
+            if self.recording {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("Waiting for button press (10 sec timeout)...");
+                });
+                if ui.button("Cancel Recording").clicked() {
+                    self.recording_cancel.store(true, Ordering::SeqCst);
+                }
+            }
 
             ui.separator();
             ui.heading("Timing Settings");
@@ -293,13 +342,6 @@ impl eframe::App for FerrisFireApp {
 
             ui.separator();
 
-            // System tray option
-            #[cfg(feature = "tray")]
-            if self.system_tray.is_some() {
-                ui.checkbox(&mut self.minimize_to_tray, "Minimize to system tray on close");
-                ui.separator();
-            }
-
             ui.collapsing("Help", |ui| {
                 ui.label("1. Select your mouse from the device list");
                 ui.label("   (Enable 'Show all input devices' if not listed)");
@@ -314,7 +356,7 @@ impl eframe::App for FerrisFireApp {
             });
         });
 
-        if self.running {
+        if self.running || self.recording {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
     }

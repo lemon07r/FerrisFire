@@ -107,10 +107,24 @@ impl TriggerButton {
 pub struct Config {
     pub device_path: String,
     pub trigger_button: TriggerButton,
+    /// Custom key code recorded from the device (overrides trigger_button if set)
+    #[serde(default)]
+    pub custom_trigger_code: Option<u16>,
     pub click_delay_min_ms: u64,
     pub click_delay_max_ms: u64,
     pub travel_time_min_ms: u64,
     pub travel_time_max_ms: u64,
+}
+
+impl Config {
+    /// Get the effective trigger key code (custom if set, otherwise from trigger_button)
+    pub fn effective_trigger_code(&self) -> evdev::KeyCode {
+        if let Some(code) = self.custom_trigger_code {
+            evdev::KeyCode(code)
+        } else {
+            self.trigger_button.to_key_code()
+        }
+    }
 }
 
 impl Default for Config {
@@ -118,6 +132,7 @@ impl Default for Config {
         Self {
             device_path: String::new(),
             trigger_button: TriggerButton::Mouse4,
+            custom_trigger_code: None,
             click_delay_min_ms: 45,
             click_delay_max_ms: 80,
             travel_time_min_ms: 10,
@@ -203,6 +218,7 @@ mod tests {
         let config = Config {
             device_path: "/dev/input/event5".to_string(),
             trigger_button: TriggerButton::Mouse5,
+            custom_trigger_code: None,
             click_delay_min_ms: 30,
             click_delay_max_ms: 60,
             travel_time_min_ms: 15,
@@ -233,6 +249,7 @@ mod tests {
         let config = Config {
             device_path: "/dev/input/event5".to_string(),
             trigger_button: TriggerButton::Mouse4,
+            custom_trigger_code: None,
             click_delay_min_ms: 45,
             click_delay_max_ms: 80,
             travel_time_min_ms: 10,
@@ -246,6 +263,7 @@ mod tests {
         let config = Config {
             device_path: "/dev/input/event5".to_string(),
             trigger_button: TriggerButton::Mouse4,
+            custom_trigger_code: None,
             click_delay_min_ms: 100,
             click_delay_max_ms: 50,
             travel_time_min_ms: 10,
@@ -261,6 +279,7 @@ mod tests {
         let config = Config {
             device_path: "/dev/input/event5".to_string(),
             trigger_button: TriggerButton::Mouse4,
+            custom_trigger_code: None,
             click_delay_min_ms: 45,
             click_delay_max_ms: 80,
             travel_time_min_ms: 30,
@@ -276,6 +295,7 @@ mod tests {
         let config = Config {
             device_path: "/dev/input/event5".to_string(),
             trigger_button: TriggerButton::Mouse4,
+            custom_trigger_code: None,
             click_delay_min_ms: 5,
             click_delay_max_ms: 80,
             travel_time_min_ms: 10,
@@ -291,6 +311,7 @@ mod tests {
         let config = Config {
             device_path: "/dev/input/event5".to_string(),
             trigger_button: TriggerButton::Mouse4,
+            custom_trigger_code: None,
             click_delay_min_ms: 50,
             click_delay_max_ms: 50,
             travel_time_min_ms: 20,
@@ -311,6 +332,7 @@ mod tests {
         let config = Config {
             device_path: "/dev/input/event5".to_string(),
             trigger_button: TriggerButton::Mouse5,
+            custom_trigger_code: None,
             click_delay_min_ms: 30,
             click_delay_max_ms: 60,
             travel_time_min_ms: 15,

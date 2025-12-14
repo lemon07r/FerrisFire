@@ -1,9 +1,13 @@
 use evdev::{
-    uinput::VirtualDevice, AttributeSet, Device, InputId, KeyCode, RelativeAxisCode,
+    uinput::VirtualDevice, AttributeSet, Device, EventType, InputId, KeyCode, RelativeAxisCode,
 };
 use std::fs;
 use std::io;
+use std::os::fd::AsRawFd;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
@@ -142,6 +146,61 @@ fn manual_scan_input_devices(mice_only: bool) -> Vec<DeviceInfo> {
 
 pub fn open_device(path: &str) -> io::Result<Device> {
     Device::open(path)
+}
+
+/// Record a button press from the device and return its key code.
+/// Returns None if cancelled or timed out.
+pub fn record_button_press(
+    device_path: &str,
+    cancel: Arc<AtomicBool>,
+    timeout: Duration,
+) -> Option<(u16, String)> {
+    let mut device = match Device::open(device_path) {
+        Ok(d) => d,
+        Err(e) => {
+            log::error!("Failed to open device for recording: {}", e);
+            return None;
+        }
+    };
+
+    // Set non-blocking mode
+    let fd = device.as_raw_fd();
+    unsafe {
+        let flags = libc::fcntl(fd, libc::F_GETFL);
+        libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+    }
+
+    let start = Instant::now();
+    
+    log::info!("Recording button press from {}...", device_path);
+
+    while !cancel.load(Ordering::Relaxed) && start.elapsed() < timeout {
+        match device.fetch_events() {
+            Ok(events) => {
+                for event in events {
+                    // Only capture key press events (value == 1)
+                    if event.event_type() == EventType::KEY && event.value() == 1 {
+                        let code = event.code();
+                        let key_code = KeyCode(code);
+                        let name = format!("{:?}", key_code);
+                        log::info!("Recorded button: {} (code {})", name, code);
+                        return Some((code, name));
+                    }
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                // No events available
+            }
+            Err(e) => {
+                log::error!("Error reading events during recording: {}", e);
+                return None;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    log::info!("Recording cancelled or timed out");
+    None
 }
 
 pub fn create_virtual_clone(physical: &Device) -> io::Result<VirtualDevice> {
