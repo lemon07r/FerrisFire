@@ -1,6 +1,10 @@
 use crate::config::Config;
 use crate::device::{create_virtual_clone, open_device};
-use crate::humanize::{random_click_interval, random_travel_time};
+use crate::humanize::{
+    random_click_interval, gaussian_click_interval,
+    random_travel_time, gaussian_travel_time,
+    FatigueTracker, BurstTracker,
+};
 use evdev::{EventType, InputEvent, KeyCode, SynchronizationCode};
 use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -10,6 +14,22 @@ use std::time::{Duration, Instant};
 
 pub fn spawn_proxy(config: Config, stop_signal: Arc<AtomicBool>) -> thread::JoinHandle<Result<(), String>> {
     thread::spawn(move || run_proxy_loop(config, stop_signal))
+}
+
+fn get_click_interval(config: &Config) -> Duration {
+    if config.use_gaussian {
+        gaussian_click_interval(config.click_delay_min_ms, config.click_delay_max_ms)
+    } else {
+        random_click_interval(config.click_delay_min_ms, config.click_delay_max_ms)
+    }
+}
+
+fn get_travel_time(config: &Config) -> Duration {
+    if config.use_gaussian {
+        gaussian_travel_time(config.travel_time_min_ms, config.travel_time_max_ms, config.travel_jitter)
+    } else {
+        random_travel_time(config.travel_time_min_ms, config.travel_time_max_ms, config.travel_jitter)
+    }
 }
 
 fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
@@ -33,9 +53,15 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
     
     // Click timing state
     let mut last_click_complete = Instant::now();
-    let mut next_interval = random_click_interval(config.click_delay_min_ms, config.click_delay_max_ms);
+    let mut next_interval = get_click_interval(&config);
     let mut button_down_since: Option<Instant> = None;
-    let mut current_travel = random_travel_time(config.travel_time_min_ms, config.travel_time_max_ms);
+    let mut current_travel = get_travel_time(&config);
+    
+    // Humanization trackers
+    let mut fatigue_tracker = FatigueTracker::new(config.fatigue_max_percent);
+    let mut burst_tracker = BurstTracker::new(config.burst_count, config.burst_pause_ms);
+    let mut burst_pause_start: Option<Instant> = None;
+    let mut current_burst_pause = Duration::ZERO;
 
     log::info!("Proxy started for device: {}", config.device_path);
     log::info!("Trigger key: {:?} (code {})", trigger_key, trigger_key.0);
@@ -51,12 +77,15 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
                             let was_held = trigger_held;
                             trigger_held = event.value() == 1;
                             
-                            // On trigger release, release any held click
+                            // On trigger release, release any held click and reset trackers
                             if was_held && !trigger_held {
                                 if button_down_since.is_some() {
                                     emit_button_up(&mut virtual_dev);
                                     button_down_since = None;
                                 }
+                                fatigue_tracker.reset();
+                                burst_tracker.reset();
+                                burst_pause_start = None;
                             }
                             continue;
                         }
@@ -74,26 +103,60 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
             }
         }
 
+        // Handle burst pause
+        if config.burst_mode {
+            if let Some(pause_start) = burst_pause_start {
+                if pause_start.elapsed() >= current_burst_pause {
+                    burst_tracker.end_pause();
+                    burst_pause_start = None;
+                    last_click_complete = Instant::now();
+                } else {
+                    // Still in pause, skip click logic
+                    thread::sleep(Duration::from_micros(250));
+                    continue;
+                }
+            }
+        }
+
         // Handle click release
         if let Some(down_time) = button_down_since {
             if down_time.elapsed() >= current_travel {
                 emit_button_up(&mut virtual_dev);
                 button_down_since = None;
                 last_click_complete = Instant::now();
-                next_interval = random_click_interval(config.click_delay_min_ms, config.click_delay_max_ms);
+                
+                // Record click for trackers
+                if config.simulate_fatigue {
+                    fatigue_tracker.click();
+                }
+                if config.burst_mode && burst_tracker.click() {
+                    // Burst complete, start pause
+                    burst_pause_start = Some(Instant::now());
+                    current_burst_pause = burst_tracker.pause_duration();
+                }
+                
+                // Get next interval with optional fatigue
+                next_interval = get_click_interval(&config);
+                if config.simulate_fatigue {
+                    next_interval = fatigue_tracker.apply(next_interval);
+                }
             }
         }
 
         // Start new click if trigger held and ready
-        if trigger_held && button_down_since.is_none() && last_click_complete.elapsed() >= next_interval {
+        let should_click = trigger_held 
+            && button_down_since.is_none() 
+            && last_click_complete.elapsed() >= next_interval
+            && (!config.burst_mode || !burst_tracker.should_pause());
+            
+        if should_click {
             emit_button_down(&mut virtual_dev);
             button_down_since = Some(Instant::now());
-            current_travel = random_travel_time(config.travel_time_min_ms, config.travel_time_max_ms);
+            current_travel = get_travel_time(&config);
         }
 
-        // Minimal sleep - use spin hint for sub-millisecond precision
-        std::hint::spin_loop();
-        thread::sleep(Duration::from_micros(50));
+        // Sleep to prevent CPU spinning
+        thread::sleep(Duration::from_micros(250));
     }
 
     // Clean up: release button if held

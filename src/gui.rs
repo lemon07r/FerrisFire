@@ -325,6 +325,43 @@ impl eframe::App for FerrisFireApp {
             });
 
             ui.separator();
+            ui.collapsing("Humanization Options", |ui| {
+                ui.add_enabled_ui(!self.running, |ui| {
+                    ui.checkbox(&mut self.config.use_gaussian, "Gaussian timing distribution")
+                        .on_hover_text("Use bell-curve distribution instead of uniform random.\nMakes timing cluster around the middle of the range.");
+                    
+                    ui.checkbox(&mut self.config.travel_jitter, "Travel time jitter")
+                        .on_hover_text("Add occasional extra variation to button release timing.\nSimulates inconsistent physical switch behavior.");
+                    
+                    ui.add_space(5.0);
+                    
+                    ui.checkbox(&mut self.config.simulate_fatigue, "Simulate fatigue")
+                        .on_hover_text("Gradually slow down click rate over time, then recover.\nMimics human finger fatigue patterns.");
+                    if self.config.simulate_fatigue {
+                        ui.horizontal(|ui| {
+                            ui.label("  Max slowdown:");
+                            ui.add(egui::Slider::new(&mut self.config.fatigue_max_percent, 10..=50).suffix("%"));
+                        });
+                    }
+                    
+                    ui.add_space(5.0);
+                    
+                    ui.checkbox(&mut self.config.burst_mode, "Burst fire mode")
+                        .on_hover_text("Fire in bursts with pauses between.\nMore natural than continuous rapid fire.");
+                    if self.config.burst_mode {
+                        ui.horizontal(|ui| {
+                            ui.label("  Clicks per burst:");
+                            ui.add(egui::Slider::new(&mut self.config.burst_count, 2..=10));
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("  Pause between bursts:");
+                            ui.add(egui::Slider::new(&mut self.config.burst_pause_ms, 50..=300).suffix(" ms"));
+                        });
+                    }
+                });
+            });
+
+            ui.separator();
 
             let button_text = if self.running { "Stop" } else { "Start" };
             let button_color = if self.running {

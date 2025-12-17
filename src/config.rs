@@ -114,7 +114,34 @@ pub struct Config {
     pub click_delay_max_ms: u64,
     pub travel_time_min_ms: u64,
     pub travel_time_max_ms: u64,
+    
+    // Humanization features
+    /// Use Gaussian distribution instead of uniform random for timing
+    #[serde(default)]
+    pub use_gaussian: bool,
+    /// Simulate fatigue - gradually slow down over time then recover
+    #[serde(default)]
+    pub simulate_fatigue: bool,
+    /// Maximum fatigue slowdown percentage (e.g., 30 = up to 30% slower)
+    #[serde(default = "default_fatigue_max_percent")]
+    pub fatigue_max_percent: u64,
+    /// Extra jitter on travel time for more natural button release
+    #[serde(default)]
+    pub travel_jitter: bool,
+    /// Enable burst fire mode - fire in bursts with pauses between
+    #[serde(default)]
+    pub burst_mode: bool,
+    /// Number of clicks per burst
+    #[serde(default = "default_burst_count")]
+    pub burst_count: u64,
+    /// Pause between bursts in milliseconds
+    #[serde(default = "default_burst_pause_ms")]
+    pub burst_pause_ms: u64,
 }
+
+fn default_fatigue_max_percent() -> u64 { 30 }
+fn default_burst_count() -> u64 { 4 }
+fn default_burst_pause_ms() -> u64 { 100 }
 
 impl Config {
     /// Get the effective trigger key code (custom if set, otherwise from trigger_button)
@@ -137,6 +164,13 @@ impl Default for Config {
             click_delay_max_ms: 80,
             travel_time_min_ms: 10,
             travel_time_max_ms: 25,
+            use_gaussian: false,
+            simulate_fatigue: false,
+            fatigue_max_percent: default_fatigue_max_percent(),
+            travel_jitter: false,
+            burst_mode: false,
+            burst_count: default_burst_count(),
+            burst_pause_ms: default_burst_pause_ms(),
         }
     }
 }
@@ -223,6 +257,7 @@ mod tests {
             click_delay_max_ms: 60,
             travel_time_min_ms: 15,
             travel_time_max_ms: 30,
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -254,6 +289,7 @@ mod tests {
             click_delay_max_ms: 80,
             travel_time_min_ms: 10,
             travel_time_max_ms: 25,
+            ..Default::default()
         };
         assert!(config.validate().is_ok());
     }
@@ -268,6 +304,7 @@ mod tests {
             click_delay_max_ms: 50,
             travel_time_min_ms: 10,
             travel_time_max_ms: 25,
+            ..Default::default()
         };
         let result = config.validate();
         assert!(result.is_err());
@@ -284,6 +321,7 @@ mod tests {
             click_delay_max_ms: 80,
             travel_time_min_ms: 30,
             travel_time_max_ms: 10,
+            ..Default::default()
         };
         let result = config.validate();
         assert!(result.is_err());
@@ -300,6 +338,7 @@ mod tests {
             click_delay_max_ms: 80,
             travel_time_min_ms: 10,
             travel_time_max_ms: 25,
+            ..Default::default()
         };
         let result = config.validate();
         assert!(result.is_err());
@@ -316,6 +355,7 @@ mod tests {
             click_delay_max_ms: 50,
             travel_time_min_ms: 20,
             travel_time_max_ms: 20,
+            ..Default::default()
         };
         assert!(config.validate().is_ok());
     }
@@ -337,6 +377,7 @@ mod tests {
             click_delay_max_ms: 60,
             travel_time_min_ms: 15,
             travel_time_max_ms: 30,
+            ..Default::default()
         };
         let cloned = config.clone();
         assert_eq!(cloned.device_path, config.device_path);
