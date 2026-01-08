@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "ferrisfire"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "dirs-next",
  "eframe",
