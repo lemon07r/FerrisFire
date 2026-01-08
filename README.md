@@ -81,6 +81,7 @@ The GUI lets you:
 
 - **Select your mouse** from the dropdown (click Refresh if you plug in a different one). Enable "Show all input devices" if your mouse isn't listed.
 - **Choose the trigger button** - Mouse 3-8, scroll wheel clicks, or F13-F24 keys (useful if your mouse software can remap buttons to F-keys)
+- **Smart ADS Trigger** - Enable to rapid-fire only when aiming (right click) and firing (left click) simultaneously. Left click works normally when not aiming.
 - **Set click delay range** - time between clicks in milliseconds (default: 45-80ms)
 - **Set travel time range** - how long each click is held down (default: 10-25ms)
 

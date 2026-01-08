@@ -193,6 +193,13 @@ impl eframe::App for FerrisFireApp {
 
             ui.separator();
             ui.heading("Trigger Configuration");
+            
+            ui.add_enabled_ui(!self.running, |ui| {
+                ui.checkbox(&mut self.config.smart_ads_trigger, "Smart ADS Trigger (RMB + LMB)")
+                    .on_hover_text("Rapid-fire activates only when aiming (right click) and firing (left click).\nLeft click works normally when not aiming.");
+            });
+            
+            ui.add_space(5.0);
 
             // Check if recording finished
             if self.recording {

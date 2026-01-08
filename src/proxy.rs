@@ -51,6 +51,10 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
     let trigger_key = config.effective_trigger_code();
     let mut trigger_held = false;
     
+    // Smart ADS state (RMB + LMB mode)
+    let mut rmb_held = false;
+    let mut lmb_held = false;
+    
     // Click timing state
     let mut last_click_complete = Instant::now();
     let mut next_interval = get_click_interval(&config);
@@ -64,7 +68,11 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
     let mut current_burst_pause = Duration::ZERO;
 
     log::info!("Proxy started for device: {}", config.device_path);
-    log::info!("Trigger key: {:?} (code {})", trigger_key, trigger_key.0);
+    if config.smart_ads_trigger {
+        log::info!("Smart ADS trigger enabled (RMB + LMB)");
+    } else {
+        log::info!("Trigger key: {:?} (code {})", trigger_key, trigger_key.0);
+    }
 
     while !stop.load(Ordering::Relaxed) {
         // Process input events
@@ -73,21 +81,76 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
                 for event in events {
                     if event.event_type() == EventType::KEY {
                         let key_code = KeyCode(event.code());
-                        if key_code == trigger_key {
-                            let was_held = trigger_held;
-                            trigger_held = event.value() == 1;
+                        
+                        // Smart ADS mode: RMB + LMB triggers rapid-fire
+                        if config.smart_ads_trigger {
+                            let is_rmb = key_code == KeyCode::BTN_RIGHT;
+                            let is_lmb = key_code == KeyCode::BTN_LEFT;
                             
-                            // On trigger release, release any held click and reset trackers
-                            if was_held && !trigger_held {
-                                if button_down_since.is_some() {
-                                    emit_button_up(&mut virtual_dev);
-                                    button_down_since = None;
+                            if is_rmb {
+                                let was_held = rmb_held;
+                                rmb_held = event.value() == 1;
+                                
+                                // On RMB release while rapid-firing, clean up
+                                if was_held && !rmb_held && lmb_held {
+                                    if button_down_since.is_some() {
+                                        emit_button_up(&mut virtual_dev);
+                                        button_down_since = None;
+                                    }
+                                    fatigue_tracker.reset();
+                                    burst_tracker.reset();
+                                    burst_pause_start = None;
                                 }
-                                fatigue_tracker.reset();
-                                burst_tracker.reset();
-                                burst_pause_start = None;
+                                // Pass through RMB events
+                                if let Err(e) = virtual_dev.emit(&[event]) {
+                                    log::warn!("Failed to emit event: {}", e);
+                                }
+                                continue;
                             }
-                            continue;
+                            
+                            if is_lmb {
+                                let was_held = lmb_held;
+                                lmb_held = event.value() == 1;
+                                
+                                // If RMB is held, we handle LMB for rapid-fire
+                                if rmb_held {
+                                    // On LMB release while rapid-firing, clean up
+                                    if was_held && !lmb_held {
+                                        if button_down_since.is_some() {
+                                            emit_button_up(&mut virtual_dev);
+                                            button_down_since = None;
+                                        }
+                                        fatigue_tracker.reset();
+                                        burst_tracker.reset();
+                                        burst_pause_start = None;
+                                    }
+                                    // Don't pass through LMB when rapid-firing
+                                    continue;
+                                }
+                                // RMB not held: pass through LMB normally
+                                if let Err(e) = virtual_dev.emit(&[event]) {
+                                    log::warn!("Failed to emit event: {}", e);
+                                }
+                                continue;
+                            }
+                        } else {
+                            // Standard trigger mode
+                            if key_code == trigger_key {
+                                let was_held = trigger_held;
+                                trigger_held = event.value() == 1;
+                                
+                                // On trigger release, release any held click and reset trackers
+                                if was_held && !trigger_held {
+                                    if button_down_since.is_some() {
+                                        emit_button_up(&mut virtual_dev);
+                                        button_down_since = None;
+                                    }
+                                    fatigue_tracker.reset();
+                                    burst_tracker.reset();
+                                    burst_pause_start = None;
+                                }
+                                continue;
+                            }
                         }
                     }
                     
@@ -143,8 +206,15 @@ fn run_proxy_loop(config: Config, stop: Arc<AtomicBool>) -> Result<(), String> {
             }
         }
 
+        // Determine if we should be rapid-firing
+        let rapid_fire_active = if config.smart_ads_trigger {
+            rmb_held && lmb_held
+        } else {
+            trigger_held
+        };
+        
         // Start new click if trigger held and ready
-        let should_click = trigger_held 
+        let should_click = rapid_fire_active 
             && button_down_since.is_none() 
             && last_click_complete.elapsed() >= next_interval
             && (!config.burst_mode || !burst_tracker.should_pause());

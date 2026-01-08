@@ -137,6 +137,9 @@ pub struct Config {
     /// Pause between bursts in milliseconds
     #[serde(default = "default_burst_pause_ms")]
     pub burst_pause_ms: u64,
+    /// Smart ADS trigger - rapid-fire only when aiming (RMB) and firing (LMB)
+    #[serde(default)]
+    pub smart_ads_trigger: bool,
 }
 
 fn default_fatigue_max_percent() -> u64 { 30 }
@@ -171,6 +174,7 @@ impl Default for Config {
             burst_mode: false,
             burst_count: default_burst_count(),
             burst_pause_ms: default_burst_pause_ms(),
+            smart_ads_trigger: false,
         }
     }
 }
